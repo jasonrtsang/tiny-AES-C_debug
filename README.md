@@ -5,3 +5,4 @@ Deviation from kokke/tiny-AES-c
 - Removes c++ support
 - Removes 192/256-bit key support
 - Removes CTR support
+- Add verbose option to print matrix at every state of encryption/ decryption processes

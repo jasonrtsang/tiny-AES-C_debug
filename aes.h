@@ -17,8 +17,10 @@
   #define ECB 1
 #endif
 
+#ifndef VERBOSE
+  #define VERBOSE 0
+#endif
 
-#define AES128 1
 
 #define AES_BLOCKLEN 16 //Block length in bytes AES is 128b block only
 

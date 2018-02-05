@@ -35,6 +35,7 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
 /*****************************************************************************/
 #include <stdint.h>
 #include <string.h> // CBC mode, for memset
+#include <stdio.h>
 #include "aes.h"
 
 /*****************************************************************************/
@@ -54,14 +55,11 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
 #endif
 
 
-
-
 /*****************************************************************************/
 /* Private variables:                                                        */
 /*****************************************************************************/
 // state - array holding the intermediate results during decryption.
 typedef uint8_t state_t[4][4];
-
 
 
 // The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
@@ -219,7 +217,7 @@ void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv)
 
 // This function adds the round key to state.
 // The round key is added to the state by an XOR function.
-static void AddRoundKey(uint8_t round,state_t* state,uint8_t* RoundKey)
+static void AddRoundKey(uint8_t round, state_t* state, uint8_t* RoundKey)
 {
   uint8_t i,j;
   for (i = 0; i < 4; ++i)
@@ -434,6 +432,93 @@ static void InvCipher(state_t* state,uint8_t* RoundKey)
 }
 
 
+#if defined(VERBOSE) && (VERBOSE == 1)
+
+// Print state matrix in hex
+static void pstate(const uint8_t round, const char process[], state_t* state)
+{
+  unsigned char i, j;
+
+  printf("\n- %d - %s\n", round, process);
+  for (i = 0; i < 4; ++i) {
+    for (j = 0; j < 4; ++j) {
+      printf("%.2x ", (*state)[i][j]);
+    }
+    printf("\n");
+  }
+  // printf("\n");
+}
+
+// Cipher is the main function that encrypts the PlainText.
+static void Cipher_verbose(state_t* state, uint8_t* RoundKey)
+{
+  uint8_t round = 0;
+  pstate(round, "First: PlainText (In)", state);
+  // Add the First round key to the state before starting the rounds.
+  AddRoundKey(0, state, RoundKey); 
+  pstate(round, "First: AddRoundKey", state);
+  
+  // There will be Nr rounds.
+  // The first Nr-1 rounds are identical.
+  // These Nr-1 rounds are executed in the loop below.
+  for (round = 1; round < Nr; ++round)
+  {
+    SubBytes(state);
+    pstate(round, "Loop: SubBytes", state);
+    ShiftRows(state);
+    pstate(round, "Loop: ShiftRows", state);
+    MixColumns(state);
+    pstate(round, "Loop: MixColumns", state);
+    AddRoundKey(round, state, RoundKey);
+    pstate(round, "Loop: AddRoundKey", state);
+  }
+
+  // The last round is given below.
+  // The MixColumns function is not here in the last round.
+  SubBytes(state);
+  pstate(round, "Last: SubBytes", state);
+  ShiftRows(state);
+  pstate(round, "Last: ShiftRows", state);
+  AddRoundKey(Nr, state, RoundKey);
+  pstate(round, "Last: AddRoundKey (Out)", state);
+}
+
+static void InvCipher_verbose(state_t* state,uint8_t* RoundKey)
+{
+  uint8_t round = 0;
+  pstate(Nr, "First: PlainText (In)", state);
+  // Add the First round key to the state before starting the rounds.
+  AddRoundKey(Nr, state, RoundKey); 
+  pstate(Nr, "First: AddRoundKey", state);
+
+  // There will be Nr rounds.
+  // The first Nr-1 rounds are identical.
+  // These Nr-1 rounds are executed in the loop below.
+  for (round = (Nr - 1); round > 0; --round)
+  {
+    InvShiftRows(state);
+    pstate(round, "Loop: InvShiftRows", state);
+    InvSubBytes(state);
+    pstate(round, "Loop: InvSubBytes", state);
+    AddRoundKey(round, state, RoundKey);
+    pstate(round, "Loop: AddRoundKey", state);
+    InvMixColumns(state);
+    pstate(round, "Loop: InvMixColumns", state);
+  }
+
+  // The last round is given below.
+  // The MixColumns function is not here in the last round.
+  InvShiftRows(state);
+  pstate(round, "Last: InvShiftRows", state);
+  InvSubBytes(state);
+  pstate(round, "Last: InvSubBytes", state);
+  AddRoundKey(0, state, RoundKey);
+  pstate(round, "Last: AddRoundKey (Out)", state);
+}
+
+#endif
+
+
 /*****************************************************************************/
 /* Public functions:                                                         */
 /*****************************************************************************/
@@ -442,13 +527,21 @@ static void InvCipher(state_t* state,uint8_t* RoundKey)
 void AES_ECB_encrypt(struct AES_ctx *ctx,const uint8_t* buf)
 {
   // The next function call encrypts the PlainText with the Key using AES algorithm.
+#if defined(VERBOSE) && (VERBOSE == 1)
+  Cipher_verbose((state_t*)buf, ctx->RoundKey);
+#else
   Cipher((state_t*)buf, ctx->RoundKey);
+#endif
 }
 
 void AES_ECB_decrypt(struct AES_ctx* ctx,const uint8_t* buf)
 {
   // The next function call decrypts the PlainText with the Key using AES algorithm.
+#if defined(VERBOSE) && (VERBOSE == 1)
+  InvCipher_verbose((state_t*)buf, ctx->RoundKey);
+#else
   InvCipher((state_t*)buf, ctx->RoundKey);
+#endif
 }
 
 #endif // #if defined(ECB) && (ECB == 1)
@@ -472,10 +565,15 @@ void AES_CBC_encrypt_buffer(struct AES_ctx *ctx,uint8_t* buf, uint32_t length)
   for (i = 0; i < length; i += AES_BLOCKLEN)
   {
     XorWithIv(buf, Iv);
+#if defined(VERBOSE) && (VERBOSE == 1)
+    printf("\nStep %lu - BlockSection: %lu\n", i/16, i);
+    Cipher_verbose((state_t*)buf, ctx->RoundKey);
+#else
     Cipher((state_t*)buf, ctx->RoundKey);
+#endif
     Iv = buf;
     buf += AES_BLOCKLEN;
-    //printf("Step %d - %d", i/16, i);
+    // printf("Step %lu - %lu", i/16, i);
   }
   /* store Iv in ctx for next call */
   memcpy(ctx->Iv, Iv, AES_BLOCKLEN);
@@ -488,7 +586,12 @@ void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
   for (i = 0; i < length; i += AES_BLOCKLEN)
   {
     memcpy(storeNextIv, buf, AES_BLOCKLEN);
+#if defined(VERBOSE) && (VERBOSE == 1)
+    printf("\nStep %lu - BlockSection: %lu\n", i/16, i);
+    InvCipher_verbose((state_t*)buf, ctx->RoundKey);
+#else
     InvCipher((state_t*)buf, ctx->RoundKey);
+#endif
     XorWithIv(buf, ctx->Iv);
     memcpy(ctx->Iv, storeNextIv, AES_BLOCKLEN);
     buf += AES_BLOCKLEN;
