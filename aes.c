@@ -1,7 +1,7 @@
 /*
 
-This is an implementation of the AES algorithm, specifically ECB, CTR and CBC mode.
-Block size can be chosen in aes.h - available choices are AES128, AES192, AES256.
+This is an implementation of the AES algorithm, specifically ECB and CBC mode.
+Block size is AES128.
 
 The implementation is verified against the test vectors in:
   National Institute of Standards and Technology Special Publication 800-38A 2001 ED
@@ -27,8 +27,6 @@ ECB-AES128
 
 NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
         You should pad the end of the string with zeros if this is not the case.
-        For AES192/256 the key size is proportionally larger.
-
 */
 
 
@@ -45,16 +43,8 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
 // The number of columns comprising a state in AES. This is a constant in AES. Value=4
 #define Nb 4
 
-#if defined(AES256) && (AES256 == 1)
-    #define Nk 8
-    #define Nr 14
-#elif defined(AES192) && (AES192 == 1)
-    #define Nk 6
-    #define Nr 12
-#else
-    #define Nk 4        // The number of 32 bit words in a key.
-    #define Nr 10       // The number of rounds in AES Cipher.
-#endif
+#define Nk 4        // The number of 32 bit words in a key.
+#define Nr 10       // The number of rounds in AES Cipher.
 
 // jcallan@github points out that declaring Multiply as a function 
 // reduces code size considerably with the Keil ARM compiler.
@@ -202,18 +192,7 @@ static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
 
       tempa[0] = tempa[0] ^ Rcon[i/Nk];
     }
-#if defined(AES256) && (AES256 == 1)
-    if (i % Nk == 4)
-    {
-      // Function Subword()
-      {
-        tempa[0] = getSBoxValue(tempa[0]);
-        tempa[1] = getSBoxValue(tempa[1]);
-        tempa[2] = getSBoxValue(tempa[2]);
-        tempa[3] = getSBoxValue(tempa[3]);
-      }
-    }
-#endif
+
     j = i * 4; k=(i - Nk) * 4;
     RoundKey[j + 0] = RoundKey[k + 0] ^ tempa[0];
     RoundKey[j + 1] = RoundKey[k + 1] ^ tempa[1];
@@ -226,7 +205,7 @@ void AES_init_ctx(struct AES_ctx* ctx, const uint8_t* key)
 {
   KeyExpansion(ctx->RoundKey, key);
 }
-#if (defined(CBC) && (CBC == 1)) || (defined(CTR) && (CTR == 1))
+#if (defined(CBC) && (CBC == 1))
 void AES_init_ctx_iv(struct AES_ctx* ctx, const uint8_t* key, const uint8_t* iv)
 {
   KeyExpansion(ctx->RoundKey, key);
@@ -460,7 +439,6 @@ static void InvCipher(state_t* state,uint8_t* RoundKey)
 /*****************************************************************************/
 #if defined(ECB) && (ECB == 1)
 
-
 void AES_ECB_encrypt(struct AES_ctx *ctx,const uint8_t* buf)
 {
   // The next function call encrypts the PlainText with the Key using AES algorithm.
@@ -473,15 +451,10 @@ void AES_ECB_decrypt(struct AES_ctx* ctx,const uint8_t* buf)
   InvCipher((state_t*)buf, ctx->RoundKey);
 }
 
-
 #endif // #if defined(ECB) && (ECB == 1)
 
 
-
-
-
 #if defined(CBC) && (CBC == 1)
-
 
 static void XorWithIv(uint8_t* buf, uint8_t* Iv)
 {
@@ -524,44 +497,4 @@ void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
 }
 
 #endif // #if defined(CBC) && (CBC == 1)
-
-
-
-#if defined(CTR) && (CTR == 1)
-
-/* Symmetrical operation: same function for encrypting as for decrypting. Note any IV/nonce should never be reused with the same key */
-void AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, uint32_t length)
-{
-  uint8_t buffer[AES_BLOCKLEN];
-  
-  unsigned i;
-  int bi;
-  for (i = 0, bi = AES_BLOCKLEN; i < length; ++i, ++bi)
-  {
-    if (bi == AES_BLOCKLEN) /* we need to regen xor compliment in buffer */
-    {
-      
-      memcpy(buffer, ctx->Iv, AES_BLOCKLEN);
-      Cipher((state_t*)buffer,ctx->RoundKey);
-
-      /* Increment Iv and handle overflow */
-      for (bi = (AES_BLOCKLEN - 1); bi >= 0; --bi)
-      {
-	/* inc will owerflow */
-        if (ctx->Iv[bi] == 255)
-	{
-          ctx->Iv[bi] = 0;
-          continue;
-        } 
-        ctx->Iv[bi] += 1;
-        break;   
-      }
-      bi = 0;
-    }
-
-    buf[i] = (buf[i] ^ buffer[bi]);
-  }
-}
-
-#endif // #if defined(CTR) && (CTR == 1)
 
