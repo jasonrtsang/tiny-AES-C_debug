@@ -3,8 +3,9 @@
 
 # Define what compiler to use and the flags.
 CC=cc
-CXX=CC
-CCFLAGS= -g -std=c99 -Wall -Werror
+CFLAGS= -g -std=c99 -Werror
+
+# -Wall Warning CFLAG
 
 # A rule in Makefile has the form:
 #
@@ -32,19 +33,24 @@ CCFLAGS= -g -std=c99 -Wall -Werror
 # The dependencies of "all" are the files (or make targets) that we want to build.
 #
 
-all: test_aes
+verbose: CFLAGS+=-DVERBOSE=1
+binaries=test_ecb test_cbc test_ecb_verbose test_cbc_verbose
 
 # Compile all .c files into .o files
 # % matches all (like * in a command)
 # $< is the source file (.c file)
 %.o : %.c
-	$(CC) -c $(CCFLAGS) $<
+	$(CC) -c $(CFLAGS) $<
 
-test_aes: aes.o test.o
-	$(CC) -o test_aes aes.o test.o
+all: aes.o test_ecb.o test_cbc.o
+	$(CC) -o test_ecb aes.o test_ecb.o
+	$(CC) -o test_cbc aes.o test_cbc.o
+	rm -f core *.o
 
-test: test_aes
-	./test_aes
+verbose: aes.o test_ecb.o test_cbc.o
+	$(CC) -o test_ecb_verbose aes.o test_ecb.o
+	$(CC) -o test_cbc_verbose aes.o test_cbc.o
+	rm -f core *.o
 
 clean:
-	rm -f core *.o test_aes
+	rm -f core $(binaries)
