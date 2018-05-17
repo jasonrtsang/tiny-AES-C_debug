@@ -1,5 +1,5 @@
 # tiny-AES-C_debug
-Deviation from kokke/tiny-AES-c
+Deviation from kokke/tiny-AES-c. Used in [zedboard_aes](https://github.com/jasonrtsang/zedboard_aes) for validation
 
 - Change Makefile to run test.c on UNIX console
 - Removes c++ support
